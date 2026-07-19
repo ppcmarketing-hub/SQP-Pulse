@@ -1,0 +1,1562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SQP Pulse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080d18;
+  --bg-panel: #0e1526;
+  --bg-panel-raised: #131b30;
+  --border: #1e2a45;
+  --border-bright: #2a3a5c;
+  --text: #e8edf7;
+  --text-dim: #8a96b3;
+  --text-faint: #5a6580;
+  --orange: #f5a623;
+  --orange-dim: #b8801f;
+  --cyan: #4ecdc4;
+  --cyan-dim: #3a9c95;
+  --red: #ff6b6b;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'Space Mono', 'Courier New', monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-display); -webkit-font-smoothing: antialiased; }
+::selection { background: var(--orange); color: var(--bg); }
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar { width: 240px; flex-shrink: 0; background: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px 16px; }
+.logo-block { padding: 0 8px 24px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.logo-name { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: -0.02em; color: var(--text); }
+.logo-name span { color: var(--orange); }
+.logo-sub { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; color: var(--text-dim); font-size: 14px; cursor: pointer; border: 1px solid transparent; margin-bottom: 2px; transition: background 0.12s ease, color 0.12s ease; }
+.nav-item:hover { background: var(--bg-panel-raised); color: var(--text); }
+.nav-item.active { background: var(--bg-panel-raised); border-color: var(--border-bright); color: var(--orange); }
+.nav-badge { margin-left: auto; font-family: var(--font-mono); font-size: 10px; padding: 1px 6px; border-radius: 10px; background: var(--bg); color: var(--text-faint); border: 1px solid var(--border); }
+.nav-badge.warn { color: var(--red); border-color: var(--red); }
+.sidebar-footer { margin-top: auto; font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); padding: 0 8px; }
+.main { flex: 1; padding: 32px 40px; max-width: 1400px; }
+.page-header { margin-bottom: 24px; }
+.page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+.page-subtitle { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); margin-top: 4px; }
+.card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+.card + .card { margin-top: 16px; }
+.card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.card-desc { font-size: 12px; color: var(--text-dim); margin-bottom: 16px; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.metric-card { background: var(--bg-panel-raised); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.metric-label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 6px; }
+.metric-value { font-size: 22px; font-weight: 700; font-family: var(--font-mono); }
+.metric-value.orange { color: var(--orange); }
+.metric-value.cyan { color: var(--cyan); }
+.metric-value.red { color: var(--red); }
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table thead th { text-align: left; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.data-table tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border); color: var(--text-dim); }
+.data-table tbody tr:hover td { background: var(--bg-panel-raised); color: var(--text); }
+.data-table .num { font-family: var(--font-mono); text-align: right; }
+.tag { display: inline-block; font-family: var(--font-mono); font-size: 10px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border-bright); }
+.tag.orange { color: var(--orange); border-color: var(--orange-dim); }
+.tag.cyan { color: var(--cyan); border-color: var(--cyan-dim); }
+.tag.red { color: var(--red); border-color: var(--red); }
+.upload-zone { border: 1px dashed var(--border-bright); border-radius: 10px; padding: 28px; text-align: center; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+.upload-zone:hover, .upload-zone.dragging { border-color: var(--orange); background: rgba(245, 166, 35, 0.04); }
+.upload-zone input { display: none; }
+.upload-zone-label { font-size: 13px; color: var(--text-dim); }
+.upload-zone-filename { font-family: var(--font-mono); font-size: 12px; color: var(--cyan); margin-top: 8px; }
+.btn { font-family: var(--font-display); font-weight: 600; font-size: 13px; padding: 9px 18px; border-radius: 7px; border: 1px solid var(--border-bright); background: var(--bg-panel-raised); color: var(--text); cursor: pointer; transition: all 0.12s ease; }
+.btn:hover:not(:disabled) { border-color: var(--orange); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.primary { background: var(--orange); border-color: var(--orange); color: var(--bg); }
+.btn.primary:hover:not(:disabled) { background: #ffb648; }
+.form-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-field label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+.form-field input, .form-field select { background: var(--bg-panel-raised); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text); font-family: var(--font-display); font-size: 13px; }
+.form-field input:focus, .form-field select:focus { outline: none; border-color: var(--orange); }
+.empty-state { text-align: center; padding: 48px 20px; color: var(--text-faint); font-size: 13px; }
+.status-banner { font-family: var(--font-mono); font-size: 12px; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; }
+.status-banner.error { background: rgba(255, 107, 107, 0.08); border: 1px solid var(--red); color: var(--red); }
+.status-banner.success { background: rgba(78, 205, 196, 0.08); border: 1px solid var(--cyan); color: var(--cyan); }
+.status-banner.info { background: rgba(245, 166, 35, 0.08); border: 1px solid var(--orange-dim); color: var(--orange); }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="logo-block">
+      <div class="logo-name">SQP <span>Pulse</span></div>
+      <div class="logo-sub">Keyword intelligence</div>
+    </div>
+    <div class="form-field" style="padding: 0 8px 12px;">
+      <label>Account</label>
+      <select id="sidebar-account">
+        <option value="">Select account&hellip;</option>
+        <option value="__new__">+ New account</option>
+      </select>
+    </div>
+    <div class="form-field hidden" id="sidebar-new-account-field" style="padding: 0 8px 16px;">
+      <label>New account name</label>
+      <input id="input-new-account" placeholder="e.g. Acme Co" />
+    </div>
+    <nav id="nav">
+      <div class="nav-item active" data-page="upload"><span>&uarr;</span><span>Upload</span></div>
+      <div class="nav-item" data-page="gaps"><span>&#9671;</span><span>Coverage Gaps</span><span class="nav-badge" id="badge-gaps"></span></div>
+      <div class="nav-item" data-page="cannibalization"><span>&otimes;</span><span>Cannibalization</span><span class="nav-badge warn" id="badge-cannibalization"></span></div>
+      <div class="nav-item" data-page="harvesting"><span>&#8962;</span><span>Harvesting</span><span class="nav-badge" id="badge-harvesting"></span></div>
+      <div class="nav-item" data-page="signal"><span>&#9670;</span><span>Conversion Signal</span><span class="nav-badge" id="badge-signal"></span></div>
+      <div class="nav-item" data-page="trends"><span>&#8767;</span><span>Trends</span></div>
+      <div class="nav-item" data-page="history"><span>&#8634;</span><span>History</span></div>
+    </nav>
+    <div class="sidebar-footer" id="sidebar-current-info">SQP Pulse (standalone) &middot; data saved in this browser only</div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div class="page-title" id="page-title">Upload</div>
+      <div class="page-subtitle" id="page-subtitle">Load this week's SQP + Targeting exports</div>
+    </div>
+
+    <div id="page-upload">
+      <div class="card">
+        <div class="card-title">Analysis context</div>
+        <div class="card-desc">Product for the account selected in the sidebar. Everything below &mdash; uploads, history, trends &mdash; is scoped to this product.</div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Product</label>
+            <select id="select-product" disabled>
+              <option value="">Select an account in the sidebar first&hellip;</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row hidden" id="field-new-product">
+          <div class="form-field"><label>ASIN</label><input id="input-new-asin" placeholder="B0XXXXXXXX" /></div>
+          <div class="form-field"><label>Product name</label><input id="input-new-product-name" placeholder="e.g. Vitamin D3 K2 Softgels" /></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">New snapshot</div>
+        <div class="card-desc">Upload the raw Search Query Performance export and the raw Targeting export (CSV or XLSX, either works). Every saved snapshot automatically appears in the History tab &mdash; nothing else to do.</div>
+        <div class="form-row">
+          <div class="form-field"><label>Upload date</label><input type="date" id="input-date" /></div>
+          <div class="form-field">
+            <label>Timeframe</label>
+            <select id="input-cadence">
+              <option value="weekly" selected>Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="adhoc">Ad hoc</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div style="flex:1"><div class="upload-zone" id="zone-sqp"><input type="file" id="file-sqp" accept=".csv,.xlsx,.xls" /><div class="upload-zone-label">Search Query Performance &mdash; CSV or XLSX, click or drag here</div><div class="upload-zone-filename" id="filename-sqp"></div></div></div>
+          <div style="flex:1"><div class="upload-zone" id="zone-targeting"><input type="file" id="file-targeting" accept=".csv,.xlsx,.xls" /><div class="upload-zone-label">Targeting export &mdash; CSV or XLSX, click or drag here</div><div class="upload-zone-filename" id="filename-targeting"></div></div></div>
+        </div>
+        <div id="status-current"></div>
+        <button class="btn primary" id="btn-save-snapshot" disabled>Save snapshot</button>
+      </div>
+    </div>
+
+
+    <div id="page-gaps" class="hidden"></div>
+    <div id="page-cannibalization" class="hidden"></div>
+    <div id="page-harvesting" class="hidden"></div>
+    <div id="page-signal" class="hidden"></div>
+    <div id="page-trends" class="hidden"></div>
+    <div id="page-history" class="hidden"></div>
+  </main>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Parsing (ported from parsers.js — same header-detection + fuzzy column
+// matching logic, adapted to run without ES module imports).
+// ---------------------------------------------------------------------------
+function findHeaderRowIndex(rows, mustContain) {
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const row = rows[i].map((c) => String(c || '').toLowerCase().trim());
+    if (mustContain.every((needle) => row.some((cell) => cell.includes(needle)))) return i;
+  }
+  return 0;
+}
+function normalizeHeader(h) {
+  return String(h || '').toLowerCase().replace(/[_\-]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function toNumber(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return v;
+  const cleaned = String(v).replace(/[$,%]/g, '').trim();
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+function mapSqpHeader(h) {
+  const n = normalizeHeader(h);
+  if (n === 'search query' || n === 'customer search term') return 'search_query';
+  if (n.includes('search query volume')) return 'search_query_volume';
+  if (n.includes('impressions') && n.includes('share')) return 'impression_share';
+  if (n.includes('impressions') && (n.includes('total') || n.includes('count'))) return 'impressions';
+  if (n.includes('clicks') && n.includes('share')) return 'click_share';
+  if (n.includes('clicks') && (n.includes('total') || n.includes('count'))) return 'clicks';
+  if (n.includes('cart add') && n.includes('share')) return 'cart_add_share';
+  if (n.includes('cart add') && (n.includes('total') || n.includes('count'))) return 'cart_adds';
+  if (n.includes('purchase') && n.includes('share')) return 'purchase_share';
+  if (n.includes('purchase') && (n.includes('total') || n.includes('count'))) return 'purchases';
+  return null;
+}
+function mapTargetingHeader(h) {
+  const n = normalizeHeader(h);
+  if (n.includes('campaign name') || n === 'campaign') return 'campaign_name';
+  if (n.includes('ad group name') || n === 'ad group') return 'ad_group_name';
+  if (n.includes('targeting') || n.includes('keyword text') || n === 'keyword') return 'keyword_text';
+  if (n.includes('match type')) return 'match_type';
+  if (n.includes('state') || n.includes('status')) return 'status';
+  if (n === 'impressions') return 'impressions';
+  if (n === 'clicks') return 'clicks';
+  // These must be checked BEFORE the generic spend/cost catch-all below.
+  // Amazon commonly labels ACoS as "Total Advertising Cost of Sale (ACOS)" —
+  // which contains the substring "cost" — so if the spend/cost check ran
+  // first, it would misclassify the ACoS column as Spend and the real ACoS
+  // value would never get captured at all.
+  if (n.includes('acos') || n.includes('advertising cost of sale')) return 'acos';
+  if (n.includes('roas') || n.includes('return on ad spend')) return 'roas';
+  if (n.includes('ctr') || n.includes('click-through rate') || n.includes('click through rate')) return 'ctr';
+  if (n.includes('cvr') || n.includes('conversion rate')) return 'cvr';
+  if (n.includes('cpc') || n.includes('cost per click')) return 'cpc';
+  if (n.includes('spend') || n.includes('cost')) return 'spend';
+  // Amazon's report also includes "7 Day Advertised SKU Sales" and "7 Day
+  // Other SKU Sales" — granular breakdowns that also contain the word
+  // "sales" but are NOT the main Sales metric. Excluding anything with
+  // "sku" avoids those columns clobbering the real "7 Day Total Sales" one.
+  if (n.includes('sales') && !n.includes('sku')) return 'sales';
+  if (n.includes('orders') || n.includes('conversions')) return 'orders';
+  return null;
+}
+function normalizeMatchType(raw) {
+  const n = String(raw || '').toLowerCase().trim();
+  if (n.includes('exact')) return 'exact';
+  if (n.includes('phrase')) return 'phrase';
+  if (n.includes('broad')) return 'broad';
+  if (n.includes('category')) return 'category';
+  if (n.includes('product') || n.includes('pat') || n.includes('asin')) return 'pat';
+  return n || 'broad';
+}
+/**
+ * Detects file type by extension and returns raw rows as an array of arrays,
+ * regardless of whether the source was CSV or XLSX. This is what lets both
+ * upload zones accept either format — parsing the container format is kept
+ * completely separate from mapping columns to SQP/Targeting fields below.
+ */
+function isXlsxFile(file) {
+  const name = file.name.toLowerCase();
+  return name.endsWith('.xlsx') || name.endsWith('.xls');
+}
+async function rowsFromFile(file) {
+  if (isXlsxFile(file)) {
+    const buf = await readAsArrayBuffer(file);
+    const workbook = XLSX.read(buf, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    return XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: '' });
+  }
+  const text = await readAsText(file);
+  return Papa.parse(text, { skipEmptyLines: true }).data;
+}
+
+const SQP_SHARE_FIELDS = ['impression_share', 'click_share', 'cart_add_share', 'purchase_share'];
+
+function mapRowsToSqpRecords(rows) {
+  const headerIdx = findHeaderRowIndex(rows, ['search query']);
+  const headerRow = rows[headerIdx];
+  const fieldMap = headerRow.map(mapSqpHeader);
+  const out = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.every((c) => c === '' || c === undefined)) continue;
+    const record = { search_query: '', search_query_volume: 0, impressions: 0, impression_share: 0, clicks: 0, click_share: 0, cart_adds: 0, cart_add_share: 0, purchases: 0, purchase_share: 0 };
+    fieldMap.forEach((field, colIdx) => {
+      if (!field) return;
+      const raw = row[colIdx];
+      if (field === 'search_query') {
+        record[field] = String(raw || '').trim();
+      } else if (SQP_SHARE_FIELDS.includes(field)) {
+        // Amazon's raw SQP export reports brand-share columns as plain
+        // percentage numbers (e.g. 100.00 meaning 100%), not fractions —
+        // so these always need dividing by 100, regardless of whether the
+        // source text happens to carry a literal "%" character or not.
+        record[field] = toNumber(raw) / 100;
+      } else {
+        record[field] = toNumber(raw);
+      }
+    });
+    if (record.search_query) out.push(record);
+  }
+  return out;
+}
+function mapRowsToTargetingRecords(rows) {
+  const headerIdx = findHeaderRowIndex(rows, ['campaign']);
+  const headerRow = rows[headerIdx];
+  const fieldMap = headerRow.map(mapTargetingHeader);
+  const out = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.every((c) => c === '' || c === undefined)) continue;
+    const record = { campaign_name: '', ad_group_name: '', keyword_text: '', match_type: 'broad', status: '', impressions: 0, clicks: 0, spend: 0, sales: 0, orders: 0, acos: null, roas: null, ctr: null, cvr: null, cpc: null };
+    fieldMap.forEach((field, colIdx) => {
+      if (!field) return;
+      const raw = row[colIdx];
+      if (field === 'campaign_name' || field === 'ad_group_name' || field === 'keyword_text' || field === 'status') record[field] = String(raw || '').trim();
+      else if (field === 'match_type') record[field] = normalizeMatchType(raw);
+      else record[field] = toNumber(raw);
+    });
+    if (record.keyword_text) out.push(record);
+  }
+  return out;
+}
+/** Reads an SQP file (CSV or XLSX) straight to canonical records. */
+async function parseSqpFile(file) { return mapRowsToSqpRecords(await rowsFromFile(file)); }
+/** Reads a Targeting file (CSV or XLSX) straight to canonical records. */
+async function parseTargetingFile(file) { return mapRowsToTargetingRecords(await rowsFromFile(file)); }
+
+// ---------------------------------------------------------------------------
+// Analysis (ported verbatim from analysis.js — same tested logic)
+// ---------------------------------------------------------------------------
+function normalize(text) {
+  return String(text || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function isExactMatch(query, keyword) { return normalize(query) === normalize(keyword); }
+function isPhraseMatch(query, keyword) {
+  const q = ` ${normalize(query)} `; const k = ` ${normalize(keyword)} `; return q.includes(k);
+}
+function isBroadMatch(query, keyword) {
+  const queryWords = new Set(normalize(query).split(' ').filter(Boolean));
+  const keywordWords = normalize(keyword).split(' ').filter(Boolean);
+  if (keywordWords.length === 0) return false;
+  return keywordWords.every((w) => queryWords.has(w));
+}
+function queryMatchesKeyword(query, keywordText, matchType) {
+  if (matchType === 'pat' || matchType === 'category') return false;
+  switch (matchType) {
+    case 'exact': return isExactMatch(query, keywordText);
+    case 'phrase': return isPhraseMatch(query, keywordText);
+    case 'broad':
+    default: return isBroadMatch(query, keywordText);
+  }
+}
+function buildKeywordQueryMap(sqpQueries, targetingKeywords) {
+  const map = [];
+  for (const q of sqpQueries) {
+    for (const kw of targetingKeywords) {
+      if (queryMatchesKeyword(q.search_query, kw.keyword_text, kw.match_type)) {
+        map.push({ search_query: q.search_query, keyword: kw, match_type: kw.match_type });
+      }
+    }
+  }
+  return map;
+}
+function findCoverageGaps(sqpQueries, keywordQueryMap, minVolume) {
+  minVolume = minVolume || 0;
+  const coveredQueries = new Set(keywordQueryMap.map((m) => normalize(m.search_query)));
+  return sqpQueries.filter((q) => q.search_query_volume >= minVolume).filter((q) => !coveredQueries.has(normalize(q.search_query))).sort((a, b) => b.search_query_volume - a.search_query_volume);
+}
+const CANNIBALIZATION_STOP_WORDS = new Set(['a', 'an', 'the', 'and', 'for', 'with', 'of', 'to', 'in']);
+
+/** Crude but effective English singularizer for common plural patterns —
+ * enough to treat "capsules"/"capsule" or "gummies"/"gummy" as the same word
+ * without needing a full dictionary. Irregular plurals (mice/mouse) aren't
+ * handled; that's an accepted limitation of a lightweight heuristic. */
+function singularizeWord(word) {
+  if (word.length > 4 && word.endsWith('ies')) return word.slice(0, -3) + 'y';
+  if (word.length > 3 && /(?:s|x|z|ch|sh)es$/.test(word)) return word.slice(0, -2);
+  if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+  return word;
+}
+
+/** Normalizes keyword text for cannibalization comparison: lowercases,
+ * strips punctuation, collapses whitespace, drops articles/conjunctions/
+ * common stop words, and singularizes each remaining word — so "Vitamin D3
+ * & K2 Gummies", "vitamin d3 k2 gummy", and "the Vitamin D3 K2 Gummies" all
+ * normalize to the same thing, while genuinely different keywords don't. */
+function normalizeKeywordForCannibalization(text) {
+  const cleaned = String(text || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  const words = cleaned
+    .split(' ')
+    .filter((w) => w && !CANNIBALIZATION_STOP_WORDS.has(w))
+    .map(singularizeWord);
+  return words.join(' ');
+}
+
+/**
+ * Cannibalization, precisely defined: the SAME keyword (after normalization)
+ * targeted with the SAME match type in 2+ DISTINCT campaigns. This looks
+ * only at the targeting data itself — it's a direct duplicate check, not an
+ * inference from which SQP search terms happen to get matched, since a
+ * broad-match keyword and an unrelated exact-match keyword both matching the
+ * same customer search term isn't the same thing as literally duplicating a
+ * keyword across campaigns and bidding against yourself in the same auction.
+ */
+function findCannibalization(targetingKeywords) {
+  const groups = new Map();
+  for (const kw of targetingKeywords) {
+    if (kw.match_type === 'pat' || kw.match_type === 'category') continue;
+    const norm = normalizeKeywordForCannibalization(kw.keyword_text);
+    if (!norm) continue;
+    const key = `${norm}|${kw.match_type}`;
+    if (!groups.has(key)) groups.set(key, { normalizedKeyword: norm, matchType: kw.match_type, rows: [] });
+    groups.get(key).rows.push(kw);
+  }
+
+  const results = [];
+  for (const group of groups.values()) {
+    const distinctCampaigns = new Set(group.rows.map((r) => r.campaign_name || ''));
+    if (distinctCampaigns.size < 2) continue;
+    results.push({
+      normalized_keyword: group.normalizedKeyword,
+      display_keyword: group.rows[0].keyword_text,
+      match_type: group.matchType,
+      campaign_count: distinctCampaigns.size,
+      rows: group.rows,
+    });
+  }
+  return results.sort((a, b) => b.campaign_count - a.campaign_count || b.rows.length - a.rows.length);
+}
+function findHarvestingCandidates(sqpQueries, keywordQueryMap, minPurchases) {
+  minPurchases = minPurchases == null ? 1 : minPurchases;
+  const matchTypesByQuery = new Map();
+  for (const m of keywordQueryMap) {
+    const key = normalize(m.search_query);
+    if (!matchTypesByQuery.has(key)) matchTypesByQuery.set(key, new Set());
+    matchTypesByQuery.get(key).add(m.match_type);
+  }
+  const scored = sqpQueries.filter((q) => q.purchases >= minPurchases).map((q) => {
+    const types = matchTypesByQuery.get(normalize(q.search_query)) || new Set();
+    const hasExact = types.has('exact');
+    const hasAny = types.size > 0;
+    let status = !hasAny ? 'new' : (!hasExact ? 'graduate' : 'covered');
+    return Object.assign({}, q, { status });
+  }).filter((q) => q.status !== 'covered');
+  return scored.sort((a, b) => b.purchase_share - a.purchase_share || b.purchases - a.purchases);
+}
+function findConversionSignal(sqpQueries, minDelta, minPurchases) {
+  minDelta = minDelta == null ? 0.02 : minDelta;
+  minPurchases = minPurchases == null ? 1 : minPurchases;
+  return sqpQueries.filter((q) => q.purchases >= minPurchases).map((q) => Object.assign({}, q, { signal_delta: q.purchase_share - q.click_share })).filter((q) => q.signal_delta >= minDelta).sort((a, b) => b.signal_delta - a.signal_delta);
+}
+function diffSnapshots(currentQueries, previousQueries) {
+  const prevByQuery = new Map(previousQueries.map((q) => [normalize(q.search_query), q]));
+  const currByQuery = new Map(currentQueries.map((q) => [normalize(q.search_query), q]));
+  const results = [];
+  for (const [key, curr] of currByQuery) {
+    const prev = prevByQuery.get(key);
+    if (!prev) {
+      results.push({ search_query: curr.search_query, status: 'new_entrant', purchase_share_delta: curr.purchase_share, click_share_delta: curr.click_share, volume_delta: null });
+    } else {
+      results.push({ search_query: curr.search_query, status: 'tracked', purchase_share_delta: curr.purchase_share - prev.purchase_share, click_share_delta: curr.click_share - prev.click_share, volume_delta: curr.search_query_volume - prev.search_query_volume });
+    }
+  }
+  for (const [key, prev] of prevByQuery) {
+    if (!currByQuery.has(key)) {
+      results.push({ search_query: prev.search_query, status: 'disappeared', purchase_share_delta: -prev.purchase_share, click_share_delta: -prev.click_share, volume_delta: null });
+    }
+  }
+  return results.sort((a, b) => Math.abs(b.purchase_share_delta) - Math.abs(a.purchase_share_delta));
+}
+
+// ---------------------------------------------------------------------------
+// CSV export helper
+// ---------------------------------------------------------------------------
+function downloadCsv(filename, rows, columns) {
+  if (rows.length === 0) return;
+  const header = columns.map((c) => c.label).join(',');
+  const lines = rows.map((row) => columns.map((c) => {
+    const val = c.value(row);
+    const str = String(val === undefined || val === null ? '' : val);
+    return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
+  }).join(','));
+  const csv = [header, ...lines].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+function escapeHtml(str) {
+  return String(str == null ? '' : str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function pct(n) { return (n * 100).toFixed(1) + '%'; }
+
+/**
+ * Makes an existing table's <th> cells clickable to sort ascending/descending.
+ * `rows` is the current data array; `columnAccessors[i]` is either a property
+ * name or a (row) => value function for the i-th column (omit/leave undefined
+ * for non-sortable columns, e.g. an actions column). `renderBody(sortedRows)`
+ * must rebuild and return the <tbody> innerHTML for the given row order —
+ * the caller owns rendering, this just owns sort state and header clicks.
+ */
+function makeSortableTable(tableEl, rows, columnAccessors, renderBody, afterRender) {
+  const ths = tableEl.querySelectorAll('thead th');
+  const state = { colIdx: null, dir: 'asc' };
+
+  function applySort() {
+    let sorted = rows;
+    if (state.colIdx != null) {
+      const accessor = columnAccessors[state.colIdx];
+      const get = typeof accessor === 'function' ? accessor : (r) => r[accessor];
+      sorted = [...rows].sort((a, b) => {
+        const va = get(a); const vb = get(b);
+        let cmp;
+        if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+        else cmp = String(va ?? '').localeCompare(String(vb ?? ''));
+        return state.dir === 'asc' ? cmp : -cmp;
+      });
+    }
+    ths.forEach((th, i) => {
+      if (columnAccessors[i] == null) return;
+      const base = th.dataset.baseText ?? th.textContent;
+      th.dataset.baseText = base;
+      th.textContent = base + (i === state.colIdx ? (state.dir === 'asc' ? ' \u25B2' : ' \u25BC') : '');
+    });
+    const tbody = tableEl.querySelector('tbody');
+    if (tbody) tbody.innerHTML = renderBody(sorted);
+    if (afterRender) afterRender(sorted);
+    return sorted;
+  }
+
+  ths.forEach((th, idx) => {
+    if (columnAccessors[idx] == null) return;
+    th.style.cursor = 'pointer';
+    th.style.userSelect = 'none';
+    th.addEventListener('click', () => {
+      if (state.colIdx === idx) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+      else { state.colIdx = idx; state.dir = 'asc'; }
+      applySort();
+    });
+  });
+
+  return applySort;
+}
+
+// ---------------------------------------------------------------------------
+// Persistence — IndexedDB, scoped to this browser only. Each saved snapshot
+// stores the parsed rows directly (IndexedDB handles structured objects
+// natively, no JSON.stringify needed) under a brand + upload date.
+// ---------------------------------------------------------------------------
+const DB_NAME = 'sqp-pulse-db';
+const DB_VERSION = 2;
+const STORE = 'snapshots';
+const PRODUCTS_STORE = 'products';
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error('This browser does not support local storage (IndexedDB).')); return; }
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE)) {
+        const store = db.createObjectStore(STORE, { keyPath: 'id' });
+        store.createIndex('productId', 'productId', { unique: false });
+      } else {
+        // Upgrading from v1 (brand-scoped, no productId index yet).
+        const store = e.target.transaction.objectStore(STORE);
+        if (!store.indexNames.contains('productId')) store.createIndex('productId', 'productId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains(PRODUCTS_STORE)) {
+        const productStore = db.createObjectStore(PRODUCTS_STORE, { keyPath: 'id' });
+        productStore.createIndex('account', 'account', { unique: false });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('Could not open local storage.'));
+  });
+}
+function makeId() {
+  return (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+async function dbSaveSnapshot(record) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(record);
+    tx.oncomplete = () => resolve(record.id);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function dbListSnapshotsForProduct(productId) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const store = tx.objectStore(STORE);
+    const results = [];
+    const source = store.index('productId').openCursor(productId);
+    source.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) { results.push(cursor.value); cursor.continue(); }
+      else resolve(results.sort((a, b) => (b.uploadDate || '').localeCompare(a.uploadDate || '')));
+    };
+    source.onerror = () => reject(source.error);
+  });
+}
+async function dbGetSnapshot(id) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDeleteSnapshot(id) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function dbSaveProduct(record) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PRODUCTS_STORE, 'readwrite');
+    tx.objectStore(PRODUCTS_STORE).put(record);
+    tx.oncomplete = () => resolve(record.id);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function dbListProducts(account) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PRODUCTS_STORE, 'readonly');
+    const store = tx.objectStore(PRODUCTS_STORE);
+    const results = [];
+    const source = account ? store.index('account').openCursor(account) : store.openCursor();
+    source.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) { results.push(cursor.value); cursor.continue(); }
+      else resolve(results.sort((a, b) => (a.productName || a.asin).localeCompare(b.productName || b.asin)));
+    };
+    source.onerror = () => reject(source.error);
+  });
+}
+async function dbGetProduct(id) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PRODUCTS_STORE, 'readonly');
+    const req = tx.objectStore(PRODUCTS_STORE).get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbListAccounts() {
+  const all = await dbListProducts();
+  return [...new Set(all.map((p) => p.account))].sort();
+}
+
+// ---------------------------------------------------------------------------
+// App state + wiring
+// ---------------------------------------------------------------------------
+const state = { sqpRows: null, targetingRows: null, keywordQueryMap: null, currentAccount: null, currentProductId: null, currentAsin: null, currentProductName: null, currentSnapshotId: null, sqpFilename: null, targetingFilename: null, productsCache: [] };
+
+function setupDropZone(zoneId, inputId, filenameId, onFile) {
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  const filenameEl = document.getElementById(filenameId);
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragging'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault(); zone.classList.remove('dragging');
+    if (e.dataTransfer.files[0]) { input.files = e.dataTransfer.files; handleFile(e.dataTransfer.files[0]); }
+  });
+  input.addEventListener('change', () => { if (input.files[0]) handleFile(input.files[0]); });
+  function handleFile(file) { filenameEl.textContent = file.name; onFile(file); }
+}
+
+function readAsText(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsText(file); }); }
+function readAsArrayBuffer(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(file); }); }
+
+function setStatus(elId, type, message) {
+  document.getElementById(elId).innerHTML = `<div class="status-banner ${type}">${escapeHtml(message)}</div>`;
+}
+
+setupDropZone('zone-sqp', 'file-sqp', 'filename-sqp', async (file) => {
+  try {
+    const rows = await parseSqpFile(file);
+    if (rows.length === 0) throw new Error("No rows found — check it's the raw Search Query Performance export.");
+    state.sqpRows = rows;
+    state.sqpFilename = file.name;
+    setStatus('status-current', 'success', `Loaded ${rows.length} search queries. Not saved yet — click "Save snapshot" below.`);
+    refreshSaveButtonState();
+  } catch (err) { setStatus('status-current', 'error', err.message); }
+});
+
+setupDropZone('zone-targeting', 'file-targeting', 'filename-targeting', async (file) => {
+  try {
+    const rows = await parseTargetingFile(file);
+    if (rows.length === 0) throw new Error("No rows found — check it's the raw targeting export.");
+    state.targetingRows = rows;
+    state.targetingFilename = file.name;
+    setStatus('status-current', 'success', `Loaded ${rows.length} targeting rows. Not saved yet — click "Save snapshot" below.`);
+    refreshSaveButtonState();
+  } catch (err) { setStatus('status-current', 'error', err.message); }
+});
+
+/** Resolves the currently selected account/product context from the form,
+ * whether it's an existing saved product or one being entered for the first time. */
+function resolveContext() {
+  const accountSelect = document.getElementById('sidebar-account');
+  const productSelect = document.getElementById('select-product');
+  const isNewAccount = accountSelect.value === '__new__';
+  const account = isNewAccount ? document.getElementById('input-new-account').value.trim() : accountSelect.value;
+  const isNewProduct = isNewAccount || productSelect.value === '__new__' || !productSelect.value;
+  if (isNewProduct) {
+    const asin = document.getElementById('input-new-asin').value.trim();
+    const productName = document.getElementById('input-new-product-name').value.trim();
+    return { account, asin, productName, productId: null, isNew: true };
+  }
+  const existing = state.productsCache.find((p) => p.id === productSelect.value);
+  return { account, asin: existing ? existing.asin : '', productName: existing ? existing.productName : '', productId: productSelect.value, isNew: false };
+}
+
+function refreshSaveButtonState() {
+  const ctx = resolveContext();
+  const btn = document.getElementById('btn-save-snapshot');
+  const hasContext = ctx.account && (ctx.productId || ctx.asin);
+  btn.disabled = !(hasContext && state.sqpRows && state.targetingRows);
+}
+
+/** Populates the Product dropdown for a given account. Pure DOM refresh —
+ * does not touch any loaded-snapshot state, so it's safe to call after a
+ * save (when we want the new product to appear without clearing what we just saved). */
+async function populateProductSelect(account) {
+  const productSelect = document.getElementById('select-product');
+  const newProductField = document.getElementById('field-new-product');
+  if (!account) {
+    productSelect.disabled = true;
+    productSelect.innerHTML = '<option value="">Select an account first&hellip;</option>';
+    newProductField.classList.add('hidden');
+    state.productsCache = [];
+    return;
+  }
+  const products = await dbListProducts(account);
+  state.productsCache = products;
+  productSelect.disabled = false;
+  productSelect.innerHTML = (products.length ? products.map((p) => `<option value="${p.id}">${escapeHtml(p.asin)}${p.productName ? ' — ' + escapeHtml(p.productName) : ''}</option>`).join('') : '')
+    + '<option value="__new__">+ New product</option>';
+  newProductField.classList.toggle('hidden', products.length > 0);
+}
+
+async function onAccountChanged(val) {
+  const newAccountField = document.getElementById('sidebar-new-account-field');
+  if (val === '__new__') {
+    newAccountField.classList.remove('hidden');
+    document.getElementById('select-product').disabled = true;
+    document.getElementById('select-product').innerHTML = '<option value="">New account — add a product below</option>';
+    document.getElementById('field-new-product').classList.remove('hidden');
+    state.productsCache = [];
+  } else {
+    newAccountField.classList.add('hidden');
+    await populateProductSelect(val);
+  }
+  await onContextChanged();
+}
+
+document.getElementById('sidebar-account').addEventListener('change', (e) => onAccountChanged(e.target.value));
+
+document.getElementById('select-product').addEventListener('change', async (e) => {
+  const newProductField = document.getElementById('field-new-product');
+  newProductField.classList.toggle('hidden', !(e.target.value === '__new__' || !e.target.value));
+  await onContextChanged();
+});
+
+document.getElementById('input-new-account').addEventListener('input', refreshSaveButtonState);
+document.getElementById('input-new-asin').addEventListener('input', refreshSaveButtonState);
+document.getElementById('input-new-product-name').addEventListener('input', refreshSaveButtonState);
+
+/** Called whenever the account/product selection changes: resets the loaded
+ * snapshot (since we've switched context) and refreshes history for the new context. */
+async function onContextChanged() {
+  state.sqpRows = null; state.targetingRows = null; state.keywordQueryMap = null; state.currentSnapshotId = null;
+  document.getElementById('filename-sqp').textContent = '';
+  document.getElementById('filename-targeting').textContent = '';
+  document.getElementById('status-current').innerHTML = '';
+  const ctx = resolveContext();
+  state.currentAccount = ctx.account || null;
+  state.currentProductId = ctx.productId;
+  updateSidebarInfo();
+  refreshSaveButtonState();
+  recomputeAndRender();
+}
+
+document.getElementById('btn-save-snapshot').addEventListener('click', async () => {
+  const ctx = resolveContext();
+  const uploadDate = document.getElementById('input-date').value || new Date().toISOString().slice(0, 10);
+  const cadence = document.getElementById('input-cadence').value;
+  if (!ctx.account || !(ctx.productId || ctx.asin) || !state.sqpRows || !state.targetingRows) return;
+  try {
+    setStatus('status-current', 'info', 'Saving snapshot…');
+    let productId = ctx.productId;
+    if (!productId) {
+      if (!ctx.asin) { setStatus('status-current', 'error', 'Enter an ASIN for the new product.'); return; }
+      productId = makeId();
+      await dbSaveProduct({ id: productId, account: ctx.account, asin: ctx.asin, productName: ctx.productName, createdAt: Date.now() });
+    }
+    const keywordQueryMap = buildKeywordQueryMap(state.sqpRows, state.targetingRows);
+    const record = {
+      id: makeId(),
+      account: ctx.account,
+      productId,
+      asin: ctx.asin,
+      productName: ctx.productName,
+      uploadDate,
+      cadence,
+      sqpFilename: state.sqpFilename,
+      targetingFilename: state.targetingFilename,
+      sqpRows: state.sqpRows,
+      targetingRows: state.targetingRows,
+      createdAt: Date.now(),
+    };
+    await dbSaveSnapshot(record);
+    state.keywordQueryMap = keywordQueryMap;
+    state.currentAccount = ctx.account;
+    state.currentProductId = productId;
+    state.currentSnapshotId = record.id;
+    setStatus('status-current', 'success', `Snapshot saved for ${ctx.account} / ${ctx.asin} (${uploadDate}). Check the History tab to see it.`);
+    updateSidebarInfo();
+    await refreshAccountOptions();
+    document.getElementById('sidebar-account').value = ctx.account;
+    document.getElementById('sidebar-new-account-field').classList.add('hidden');
+    await populateProductSelect(ctx.account);
+    document.getElementById('select-product').value = productId;
+    recomputeAndRender();
+  } catch (err) {
+    setStatus('status-current', 'error', 'Could not save snapshot: ' + err.message);
+  }
+});
+
+const PRESET_ACCOUNTS = ['PrimeMD', 'Medchoice', 'Nusava'];
+
+async function refreshAccountOptions() {
+  const dynamicAccounts = await dbListAccounts();
+  const extra = dynamicAccounts.filter((a) => !PRESET_ACCOUNTS.includes(a));
+  const accounts = [...PRESET_ACCOUNTS, ...extra];
+  const select = document.getElementById('sidebar-account');
+  const prevValue = select.value;
+  select.innerHTML = '<option value="">Select account&hellip;</option>'
+    + accounts.map((a) => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('')
+    + '<option value="__new__">+ New account</option>';
+  if (accounts.includes(prevValue) || prevValue === '__new__') select.value = prevValue;
+  return accounts;
+}
+
+async function loadSnapshotById(id, productId) {
+  try {
+    const record = await dbGetSnapshot(id);
+    if (!record) return;
+    state.sqpRows = record.sqpRows;
+    state.targetingRows = record.targetingRows;
+    state.keywordQueryMap = buildKeywordQueryMap(record.sqpRows, record.targetingRows);
+    state.currentAccount = record.account;
+    state.currentProductId = record.productId;
+    state.currentSnapshotId = record.id;
+    document.getElementById('input-date').value = record.uploadDate;
+    document.getElementById('input-cadence').value = record.cadence || 'adhoc';
+    const productSelect = document.getElementById('select-product');
+    if (productSelect.querySelector(`option[value="${record.productId}"]`)) {
+      productSelect.value = record.productId;
+      document.getElementById('field-new-product').classList.add('hidden');
+    }
+    setStatus('status-current', 'success', `Loaded saved snapshot: ${record.account} / ${record.asin} (${record.uploadDate}).`);
+    updateSidebarInfo();
+    recomputeAndRender();
+  } catch (err) {
+    setStatus('status-current', 'error', 'Could not load snapshot: ' + err.message);
+  }
+}
+
+async function deleteSnapshotById(id, productId) {
+  if (!window.confirm('Delete this snapshot? This cannot be undone.')) return;
+  await dbDeleteSnapshot(id);
+  if (state.currentSnapshotId === id) {
+    state.sqpRows = null; state.targetingRows = null; state.keywordQueryMap = null; state.currentSnapshotId = null;
+    updateSidebarInfo();
+    recomputeAndRender();
+  } else {
+    await renderHistory();
+  }
+}
+
+function updateSidebarInfo() {
+  const el = document.getElementById('sidebar-current-info');
+  if (state.currentAccount && state.currentProductId) {
+    const ctx = resolveContext();
+    el.textContent = `Viewing: ${state.currentAccount} / ${ctx.asin || ''} \u00b7 data saved in this browser only`;
+  } else {
+    el.textContent = 'SQP Pulse (standalone) \u00b7 data saved in this browser only';
+  }
+}
+
+async function initApp() {
+  document.getElementById('input-date').value = new Date().toISOString().slice(0, 10);
+  await refreshAccountOptions();
+}
+
+function recomputeAndRender() {
+  if (state.sqpRows && state.targetingRows) {
+    state.keywordQueryMap = buildKeywordQueryMap(state.sqpRows, state.targetingRows);
+  }
+  renderGaps(); renderCannibalization(); renderHarvesting(); renderSignal(); renderTrends(); renderHistory(); updateBadges();
+}
+
+function updateBadges() {
+  if (!state.sqpRows || !state.keywordQueryMap) return;
+  document.getElementById('badge-gaps').textContent = findCoverageGaps(state.sqpRows, state.keywordQueryMap).length;
+  document.getElementById('badge-cannibalization').textContent = findCannibalization(state.targetingRows).length;
+  document.getElementById('badge-harvesting').textContent = findHarvestingCandidates(state.sqpRows, state.keywordQueryMap).length;
+  document.getElementById('badge-signal').textContent = findConversionSignal(state.sqpRows).length;
+}
+
+function noDataYet(container) {
+  container.innerHTML = '<div class="card"><div class="empty-state">Upload a SQP file and a Targeting file first &mdash; nothing to analyze yet.</div></div>';
+}
+
+function renderGaps() {
+  const container = document.getElementById('page-gaps');
+  if (!state.sqpRows || !state.keywordQueryMap) return noDataYet(container);
+  const gaps = findCoverageGaps(state.sqpRows, state.keywordQueryMap);
+  const totalVolume = state.sqpRows.reduce((s, q) => s + q.search_query_volume, 0);
+  const gapVolume = gaps.reduce((s, q) => s + q.search_query_volume, 0);
+  const gapPct = totalVolume > 0 ? ((gapVolume / totalVolume) * 100).toFixed(1) : '0.0';
+  const buildBody = (sorted) => sorted.slice(0, 200).map((q) => `<tr><td>${escapeHtml(q.search_query)}</td><td class="num">${q.search_query_volume.toLocaleString()}</td><td class="num">${q.impressions.toLocaleString()}</td><td class="num">${q.clicks.toLocaleString()}</td><td class="num">${pct(q.purchase_share)}</td></tr>`).join('');
+  container.innerHTML = `
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">Untargeted queries</div><div class="metric-value orange">${gaps.length}</div></div>
+      <div class="metric-card"><div class="metric-label">Share of total volume</div><div class="metric-value">${gapPct}%</div></div>
+      <div class="metric-card"><div class="metric-label">Total queries</div><div class="metric-value">${state.sqpRows.length}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Coverage gaps</div>
+      <div class="card-desc">Search queries with real volume that no keyword currently targets. Click a column header to sort${gaps.length > 200 ? ' (showing top 200)' : ''}.</div>
+      ${gaps.length === 0 ? '<div class="empty-state">No coverage gaps &mdash; nice.</div>' : `<table class="data-table" id="gaps-table"><thead><tr><th>Search query</th><th class="num">Volume</th><th class="num">Impressions</th><th class="num">Clicks</th><th class="num">Purchase share</th></tr></thead><tbody>${buildBody(gaps)}</tbody></table>`}
+    </div>`;
+  if (gaps.length > 0) {
+    makeSortableTable(document.getElementById('gaps-table'), gaps, ['search_query', 'search_query_volume', 'impressions', 'clicks', 'purchase_share'], buildBody);
+  }
+}
+
+function statusTag(status) {
+  const n = String(status || '').toLowerCase();
+  if (!n) return '<span class="tag" style="color:var(--text-faint); border-color:var(--border);">unknown</span>';
+  if (n.includes('enable')) return `<span class="tag cyan">${escapeHtml(status)}</span>`;
+  if (n.includes('pause')) return `<span class="tag orange">${escapeHtml(status)}</span>`;
+  if (n.includes('archiv')) return `<span class="tag red">${escapeHtml(status)}</span>`;
+  return `<span class="tag" style="color:var(--text-dim); border-color:var(--border-bright);">${escapeHtml(status)}</span>`;
+}
+
+function renderCannibalization() {
+  const container = document.getElementById('page-cannibalization');
+  if (!state.sqpRows || !state.targetingRows) return noDataYet(container);
+  const allOverlaps = findCannibalization(state.targetingRows);
+  const overlaps = allOverlaps.slice(0, 200);
+
+  if (overlaps.length === 0) {
+    container.innerHTML = `
+      <div class="metric-grid"><div class="metric-card"><div class="metric-label">Duplicated keywords</div><div class="metric-value red">0</div></div></div>
+      <div class="card">
+        <div class="card-title">Cannibalized keywords</div>
+        <div class="card-desc">The same keyword, same match type, targeted in 2+ campaigns at once.</div>
+        <div class="empty-state">No duplicated keywords detected across campaigns.</div>
+      </div>`;
+    return;
+  }
+
+  const expandedIdx = new Set();
+
+  function buildDetailRowsHtml(rows) {
+    return rows.map((k) => {
+      const cpc = k.cpc != null ? k.cpc : (k.clicks > 0 ? k.spend / k.clicks : null);
+      return `<tr>
+        <td>${escapeHtml(k.campaign_name || '\u2014')}</td>
+        <td>${escapeHtml(k.ad_group_name || '\u2014')}</td>
+        <td>${escapeHtml(k.keyword_text || '\u2014')}</td>
+        <td>${statusTag(k.status)}</td>
+        <td class="num">${(k.impressions || 0).toLocaleString()}</td>
+        <td class="num">${(k.clicks || 0).toLocaleString()}</td>
+        <td class="num">${k.ctr != null ? pct(k.ctr) : '\u2014'}</td>
+        <td class="num">$${(k.spend || 0).toFixed(2)}</td>
+        <td class="num">${cpc != null ? '$' + cpc.toFixed(2) : '\u2014'}</td>
+        <td class="num">${(k.orders || 0).toLocaleString()}</td>
+        <td class="num">$${(k.sales || 0).toFixed(2)}</td>
+        <td class="num">${k.acos != null ? pct(k.acos) : '\u2014'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function buildDetailHtml(o, i) {
+    return `<div style="padding:12px 10px 16px 30px; overflow-x:auto;">
+      <table class="data-table" id="cannib-detail-table-${i}">
+        <thead><tr><th>Campaign</th><th>Ad group</th><th>Keyword (as entered)</th><th>Status</th><th class="num">Impressions</th><th class="num">Clicks</th><th class="num">CTR</th><th class="num">Spend</th><th class="num">CPC</th><th class="num">Orders</th><th class="num">Sales</th><th class="num">ACoS</th></tr></thead>
+        <tbody>${buildDetailRowsHtml(o.rows)}</tbody>
+      </table>
+    </div>`;
+  }
+
+  function buildBody(sorted) {
+    return sorted.map((o) => {
+      const i = overlaps.indexOf(o);
+      const isOpen = expandedIdx.has(i);
+      return `
+      <tr class="cannib-row" data-idx="${i}" style="cursor:pointer;">
+        <td><span class="cannib-arrow" style="display:inline-block; margin-right:8px; color:var(--text-faint); transition:transform 0.12s ease; transform:rotate(${isOpen ? 90 : 0}deg);">&#9656;</span>${escapeHtml(o.display_keyword)}</td>
+        <td><span class="tag cyan">${escapeHtml(o.match_type)}</span></td>
+        <td class="num">${o.campaign_count}</td>
+        <td class="num">${o.rows.length}</td>
+      </tr>
+      <tr class="cannib-detail-row${isOpen ? '' : ' hidden'}" id="cannib-detail-${i}"><td colspan="4" style="padding:0;">${buildDetailHtml(o, i)}</td></tr>`;
+    }).join('');
+  }
+
+  function wireRowClicks() {
+    container.querySelectorAll('.cannib-row').forEach((tr) => {
+      tr.addEventListener('click', () => {
+        const idx = Number(tr.dataset.idx);
+        const detail = document.getElementById(`cannib-detail-${idx}`);
+        const arrow = tr.querySelector('.cannib-arrow');
+        const willOpen = detail.classList.contains('hidden');
+        detail.classList.toggle('hidden');
+        arrow.style.transform = willOpen ? 'rotate(90deg)' : 'rotate(0deg)';
+        if (willOpen) expandedIdx.add(idx); else expandedIdx.delete(idx);
+      });
+    });
+    // Every group's detail table is already in the DOM (just hidden until
+    // expanded), so wire up sorting for all of them here — lets you rank a
+    // group's occurrences by ACoS or Sales to decide what to keep vs. cut.
+    overlaps.forEach((o, i) => {
+      const detailTable = document.getElementById(`cannib-detail-table-${i}`);
+      if (!detailTable) return;
+      makeSortableTable(
+        detailTable,
+        o.rows,
+        ['campaign_name', 'ad_group_name', 'keyword_text', 'status', 'impressions', 'clicks', 'ctr', 'spend', (r) => (r.cpc != null ? r.cpc : (r.clicks > 0 ? r.spend / r.clicks : 0)), 'orders', 'sales', 'acos'],
+        buildDetailRowsHtml
+      );
+    });
+  }
+
+  container.innerHTML = `
+    <div class="metric-grid"><div class="metric-card"><div class="metric-label">Duplicated keywords</div><div class="metric-value red">${allOverlaps.length}</div></div></div>
+    <div class="card">
+      <div class="card-title">Cannibalized keywords</div>
+      <div class="card-desc">The same keyword (ignoring case, punctuation, articles, and singular/plural) targeted with the same match type in 2+ campaigns at once. Click a row to see each campaign's performance &mdash; Impressions, Clicks, CTR, Spend, CPC, Orders, Sales, ACoS &mdash; to decide which one should keep it. Click any column header to sort.</div>
+      <table class="data-table" id="cannib-table">
+        <thead><tr><th>Keyword</th><th>Match type</th><th class="num">Campaigns</th><th class="num">Occurrences</th></tr></thead>
+        <tbody>${buildBody(overlaps)}</tbody>
+      </table>
+    </div>`;
+
+  wireRowClicks();
+
+  makeSortableTable(
+    document.getElementById('cannib-table'),
+    overlaps,
+    ['display_keyword', 'match_type', 'campaign_count', (r) => r.rows.length],
+    buildBody,
+    () => wireRowClicks()
+  );
+
+  if (allOverlaps.length > 200) {
+    container.insertAdjacentHTML('beforeend', `<div class="card-desc" style="margin-top:12px; padding: 0 4px;">Showing top 200 of ${allOverlaps.length} by campaign count.</div>`);
+  }
+}
+
+function renderHarvesting() {
+  const container = document.getElementById('page-harvesting');
+  if (!state.sqpRows || !state.keywordQueryMap) return noDataYet(container);
+  const candidates = findHarvestingCandidates(state.sqpRows, state.keywordQueryMap);
+  const newCount = candidates.filter((c) => c.status === 'new').length;
+  const graduateCount = candidates.filter((c) => c.status === 'graduate').length;
+  const statusLabel = (c) => (c.status === 'new' ? 'New keyword' : 'Graduate to exact');
+  const buildBody = (sorted) => sorted.slice(0, 200).map((c) => {
+    const label = c.status === 'new' ? '<span class="tag orange">New keyword</span>' : '<span class="tag cyan">Graduate to exact</span>';
+    return `<tr><td>${escapeHtml(c.search_query)}</td><td>${label}</td><td class="num">${c.search_query_volume.toLocaleString()}</td><td class="num">${c.purchases}</td><td class="num">${pct(c.purchase_share)}</td><td class="num">${pct(c.click_share)}</td></tr>`;
+  }).join('');
+  container.innerHTML = `
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">New keyword candidates</div><div class="metric-value orange">${newCount}</div></div>
+      <div class="metric-card"><div class="metric-label">Graduate to exact</div><div class="metric-value cyan">${graduateCount}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Keyword harvesting &amp; expansion</div>
+      <div class="card-desc">Queries earning purchases that are untargeted or only covered via broad/phrase match. Click a column header to sort${candidates.length > 200 ? ' (showing top 200)' : ''}.</div>
+      ${candidates.length === 0 ? '<div class="empty-state">No harvesting candidates.</div>' : `<table class="data-table" id="harvesting-table"><thead><tr><th>Search query</th><th>Status</th><th class="num">Volume</th><th class="num">Purchases</th><th class="num">Purchase share</th><th class="num">Click share</th></tr></thead><tbody>${buildBody(candidates)}</tbody></table><div style="margin-top:16px;"><button class="btn" id="export-harvesting">Export CSV</button></div>`}
+    </div>`;
+  if (candidates.length > 0) {
+    makeSortableTable(document.getElementById('harvesting-table'), candidates, ['search_query', statusLabel, 'search_query_volume', 'purchases', 'purchase_share', 'click_share'], buildBody);
+  }
+  const btn = document.getElementById('export-harvesting');
+  if (btn) btn.addEventListener('click', () => downloadCsv('sqp-pulse-harvesting-candidates.csv', candidates, [
+    { label: 'Search Query', value: (r) => r.search_query },
+    { label: 'Status', value: (r) => (r.status === 'new' ? 'New keyword' : 'Graduate to exact') },
+    { label: 'Search Query Volume', value: (r) => r.search_query_volume },
+    { label: 'Purchases', value: (r) => r.purchases },
+    { label: 'Purchase Share', value: (r) => r.purchase_share },
+    { label: 'Click Share', value: (r) => r.click_share },
+  ]));
+}
+
+function renderSignal() {
+  const container = document.getElementById('page-signal');
+  if (!state.sqpRows) return noDataYet(container);
+  const signals = findConversionSignal(state.sqpRows);
+  const buildBody = (sorted) => sorted.slice(0, 200).map((s) => `<tr><td>${escapeHtml(s.search_query)}</td><td class="num">${pct(s.purchase_share)}</td><td class="num">${pct(s.click_share)}</td><td class="num" style="color:var(--orange)">+${(s.signal_delta * 100).toFixed(1)}pp</td><td class="num">${s.search_query_volume.toLocaleString()}</td></tr>`).join('');
+  container.innerHTML = `
+    <div class="metric-grid"><div class="metric-card"><div class="metric-label">Queries with strong signal</div><div class="metric-value orange">${signals.length}</div></div></div>
+    <div class="card">
+      <div class="card-title">Conversion share signal</div>
+      <div class="card-desc">Queries where purchase share meaningfully outpaces click share &mdash; strong, possibly underexploited buyer intent. Click a column header to sort${signals.length > 200 ? ' (showing top 200)' : ''}.</div>
+      ${signals.length === 0 ? '<div class="empty-state">No queries clear this signal threshold.</div>' : `<table class="data-table" id="signal-table"><thead><tr><th>Search query</th><th class="num">Purchase share</th><th class="num">Click share</th><th class="num">Signal delta</th><th class="num">Volume</th></tr></thead><tbody>${buildBody(signals)}</tbody></table><div style="margin-top:16px;"><button class="btn" id="export-signal">Export CSV</button></div>`}
+    </div>`;
+  if (signals.length > 0) {
+    makeSortableTable(document.getElementById('signal-table'), signals, ['search_query', 'purchase_share', 'click_share', 'signal_delta', 'search_query_volume'], buildBody);
+  }
+  const btn = document.getElementById('export-signal');
+  if (btn) btn.addEventListener('click', () => downloadCsv('sqp-pulse-conversion-signal.csv', signals, [
+    { label: 'Search Query', value: (r) => r.search_query },
+    { label: 'Purchase Share', value: (r) => r.purchase_share },
+    { label: 'Click Share', value: (r) => r.click_share },
+    { label: 'Signal Delta', value: (r) => r.signal_delta },
+    { label: 'Purchases', value: (r) => r.purchases },
+    { label: 'Search Query Volume', value: (r) => r.search_query_volume },
+  ]));
+}
+
+/**
+ * Every raw SQP field, aggregated to a single number per snapshot so it can
+ * be charted over time. Count-type fields (volume, impressions, clicks,
+ * cart adds, purchases) are summed across all queries in that snapshot —
+ * these are Amazon's market-wide totals for the tracked queries. Share
+ * fields are weighted by their corresponding total, giving a single blended
+ * "overall share" number per snapshot rather than an unweighted average
+ * across queries of wildly different volume.
+ */
+const METRIC_DEFS = {
+  search_query_volume: { label: 'Search Query Volume', agg: 'sum', field: 'search_query_volume', format: 'number' },
+  impressions: { label: 'Impressions (Market Total)', agg: 'sum', field: 'impressions', format: 'number' },
+  impression_share: { label: 'Impression Share (Blended)', agg: 'weighted', numField: 'impression_share', weightField: 'impressions', format: 'percent' },
+  clicks: { label: 'Clicks (Market Total)', agg: 'sum', field: 'clicks', format: 'number' },
+  click_share: { label: 'Click Share (Blended)', agg: 'weighted', numField: 'click_share', weightField: 'clicks', format: 'percent' },
+  cart_adds: { label: 'Cart Adds (Market Total)', agg: 'sum', field: 'cart_adds', format: 'number' },
+  cart_add_share: { label: 'Cart Add Share (Blended)', agg: 'weighted', numField: 'cart_add_share', weightField: 'cart_adds', format: 'percent' },
+  purchases: { label: 'Purchases (Market Total)', agg: 'sum', field: 'purchases', format: 'number' },
+  purchase_share: { label: 'Purchase Share / Conversion Share (Blended)', agg: 'weighted', numField: 'purchase_share', weightField: 'purchases', format: 'percent' },
+};
+
+function computeSnapshotMetric(sqpRows, metricKey) {
+  const def = METRIC_DEFS[metricKey];
+  if (def.agg === 'sum') {
+    return sqpRows.reduce((sum, q) => sum + (q[def.field] || 0), 0);
+  }
+  let totalWeight = 0, totalWeighted = 0;
+  sqpRows.forEach((q) => {
+    const w = q[def.weightField] || 0;
+    totalWeight += w;
+    totalWeighted += w * (q[def.numField] || 0);
+  });
+  return totalWeight > 0 ? totalWeighted / totalWeight : 0;
+}
+
+function formatMetricValue(value, format) {
+  if (format === 'percent') return (value * 100).toFixed(1) + '%';
+  return Math.round(value).toLocaleString();
+}
+
+let trendChartInstance = null;
+let keywordChartInstance = null;
+
+function getRowMetricValue(row, metricKey) {
+  const def = METRIC_DEFS[metricKey];
+  const field = def.agg === 'sum' ? def.field : def.numField;
+  return row[field] || 0;
+}
+
+function trendArrowHtml(delta) {
+  if (delta > 0) return { arrow: '&#9650;', color: 'var(--cyan)', label: 'Trending Upward' };
+  if (delta < 0) return { arrow: '&#9660;', color: 'var(--red)', label: 'Trending Downward' };
+  return { arrow: '&#9644;', color: 'var(--text-faint)', label: 'Flat \u2014 No Change' };
+}
+
+function buildInsightsHtml(prevPoint, lastPoint, def) {
+  const delta = lastPoint.value - prevPoint.value;
+  const pctChange = prevPoint.value !== 0 ? (delta / Math.abs(prevPoint.value)) * 100 : null;
+  const t = trendArrowHtml(delta);
+  return `
+    <div class="card">
+      <div class="card-title">Insights</div>
+      <div style="display:flex; align-items:center; gap:20px;">
+        <div style="font-size:38px; color:${t.color}; line-height:1;">${t.arrow}</div>
+        <div>
+          <div style="font-size:15px; font-weight:700; color:${t.color};">${t.label}</div>
+          <div style="font-family:var(--font-mono); font-size:13px; color:var(--text-dim); margin-top:6px;">
+            Absolute change: <span style="color:${t.color}; font-weight:600;">${delta >= 0 ? '+' : ''}${formatMetricValue(delta, def.format)}</span>
+            &nbsp;&middot;&nbsp;
+            % change: <span style="color:${t.color}; font-weight:600;">${pctChange == null ? '\u2014' : (pctChange >= 0 ? '+' : '') + pctChange.toFixed(1) + '%'}</span>
+          </div>
+          <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-faint); margin-top:6px;">${escapeHtml(prevPoint.date)} \u2192 ${escapeHtml(lastPoint.date)} &middot; latest value ${formatMetricValue(lastPoint.value, def.format)}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function renderTrends() {
+  const container = document.getElementById('page-trends');
+  if (typeof Chart === 'undefined') {
+    container.innerHTML = '<div class="card"><div class="status-banner error">The charting library (Chart.js) didn\'t load \u2014 usually a network/firewall block on cdnjs.cloudflare.com. Check your connection or try a different network, then refresh this page.</div></div>';
+    return;
+  }
+  if (!state.currentProductId) {
+    container.innerHTML = '<div class="card"><div class="empty-state">Select or create a product above to see its trends.</div></div>';
+    return;
+  }
+  const allSnapshots = await dbListSnapshotsForProduct(state.currentProductId);
+  if (allSnapshots.length < 2) {
+    container.innerHTML = `<div class="card"><div class="card-title">Trends</div><div class="empty-state">Save at least 2 snapshots for this product to see trends \u2014 currently ${allSnapshots.length}.</div></div>`;
+    return;
+  }
+
+  const metricOptions = Object.entries(METRIC_DEFS).map(([key, def]) => `<option value="${key}">${escapeHtml(def.label)}</option>`).join('');
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-title">Week-over-week trend</div>
+      <div class="card-desc">Every saved snapshot for this product, plotted over time &mdash; spans as much history as you've uploaded, week after week.</div>
+      <div class="form-row">
+        <div class="form-field"><label>Metric</label><select id="trend-metric-select">${metricOptions}</select></div>
+        <div class="form-field">
+          <label>Timeframe</label>
+          <select id="trend-cadence-filter">
+            <option value="weekly" selected>Weekly (WoW)</option>
+            <option value="all">All timeframes</option>
+            <option value="monthly">Monthly only</option>
+            <option value="adhoc">Ad hoc only</option>
+          </select>
+        </div>
+      </div>
+      <div style="position:relative; height:320px;"><canvas id="trend-canvas"></canvas></div>
+    </div>
+    <div id="trend-insights"></div>
+    <div id="trend-keywords"></div>
+    <div id="trend-keyword-detail"></div>`;
+
+  const metricSelect = document.getElementById('trend-metric-select');
+  const cadenceSelect = document.getElementById('trend-cadence-filter');
+  metricSelect.value = 'purchase_share';
+
+  let top25Cache = [];
+  let currentChronological = [];
+  let currentMetricKey = 'purchase_share';
+  let selectedKeywordIdx = null;
+
+  const renderKeywordDetail = (idx) => {
+    selectedKeywordIdx = idx;
+    const query = top25Cache[idx].search_query;
+    const def = METRIC_DEFS[currentMetricKey];
+    const series = [];
+    currentChronological.forEach((snap) => {
+      const row = snap.sqpRows.find((q) => normalize(q.search_query) === normalize(query));
+      if (row) series.push({ date: snap.uploadDate, value: getRowMetricValue(row, currentMetricKey) });
+    });
+
+    const detailEl = document.getElementById('trend-keyword-detail');
+    if (series.length < 2) {
+      if (keywordChartInstance) { keywordChartInstance.destroy(); keywordChartInstance = null; }
+      detailEl.innerHTML = `<div class="card"><div class="card-title">${escapeHtml(query)}</div><div class="empty-state">This keyword only appears in one snapshot in this timeframe \u2014 not enough history to trend yet.</div></div>`;
+      return;
+    }
+
+    detailEl.innerHTML = `
+      <div class="card">
+        <div class="card-title">Keyword trend: ${escapeHtml(query)}</div>
+        <div class="card-desc">Isolated week-over-week trend for this one search query, using the same metric selected above.</div>
+        <div style="position:relative; height:240px;"><canvas id="keyword-trend-canvas"></canvas></div>
+        <div id="keyword-insights" style="margin-top:16px;"></div>
+      </div>`;
+
+    if (keywordChartInstance) keywordChartInstance.destroy();
+    const ctx = document.getElementById('keyword-trend-canvas').getContext('2d');
+    keywordChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: series.map((s) => s.date),
+        datasets: [{
+          label: query,
+          data: series.map((s) => s.value),
+          borderColor: '#4ecdc4',
+          backgroundColor: 'rgba(78,205,196,0.12)',
+          pointBackgroundColor: '#f5a623',
+          pointBorderColor: '#f5a623',
+          pointRadius: 4,
+          tension: 0.25,
+          fill: true,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: '#1e2a45' }, ticks: { color: '#8a96b3', font: { family: 'Space Mono', size: 10 } } },
+          y: {
+            grid: { color: '#1e2a45' },
+            ticks: {
+              color: '#8a96b3', font: { family: 'Space Mono', size: 10 },
+              callback: (v) => (def.format === 'percent' ? (v * 100).toFixed(0) + '%' : v.toLocaleString()),
+            },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (c) => formatMetricValue(c.parsed.y, def.format) } },
+        },
+      },
+    });
+
+    document.getElementById('keyword-insights').innerHTML = buildInsightsHtml(series[series.length - 2], series[series.length - 1], def);
+  };
+
+  const draw = () => {
+    const cadenceFilter = cadenceSelect.value;
+    const filtered = cadenceFilter === 'all' ? allSnapshots : allSnapshots.filter((s) => (s.cadence || 'adhoc') === cadenceFilter);
+
+    if (filtered.length < 2) {
+      if (trendChartInstance) { trendChartInstance.destroy(); trendChartInstance = null; }
+      document.getElementById('trend-canvas').replaceWith(Object.assign(document.createElement('canvas'), { id: 'trend-canvas' }));
+      document.getElementById('trend-insights').innerHTML = '';
+      document.getElementById('trend-keywords').innerHTML = `<div class="card"><div class="empty-state">Not enough ${cadenceFilter === 'all' ? '' : CADENCE_LABELS[cadenceFilter].toLowerCase() + ' '}snapshots to chart yet.</div></div>`;
+      document.getElementById('trend-keyword-detail').innerHTML = '';
+      return;
+    }
+
+    const chronological = [...filtered].sort((a, b) => (a.uploadDate || '').localeCompare(b.uploadDate || ''));
+    currentChronological = chronological;
+    const metricKey = metricSelect.value;
+    currentMetricKey = metricKey;
+    const def = METRIC_DEFS[metricKey];
+    const series = chronological.map((s) => ({ date: s.uploadDate, value: computeSnapshotMetric(s.sqpRows, metricKey) }));
+
+    if (trendChartInstance) trendChartInstance.destroy();
+    const ctx = document.getElementById('trend-canvas').getContext('2d');
+    trendChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: series.map((s) => s.date),
+        datasets: [{
+          label: def.label,
+          data: series.map((s) => s.value),
+          borderColor: '#f5a623',
+          backgroundColor: 'rgba(245,166,35,0.12)',
+          pointBackgroundColor: '#4ecdc4',
+          pointBorderColor: '#4ecdc4',
+          pointRadius: 4,
+          tension: 0.25,
+          fill: true,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: '#1e2a45' }, ticks: { color: '#8a96b3', font: { family: 'Space Mono', size: 10 } } },
+          y: {
+            grid: { color: '#1e2a45' },
+            ticks: {
+              color: '#8a96b3', font: { family: 'Space Mono', size: 10 },
+              callback: (v) => (def.format === 'percent' ? (v * 100).toFixed(0) + '%' : v.toLocaleString()),
+            },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (c) => formatMetricValue(c.parsed.y, def.format) } },
+        },
+      },
+    });
+
+    document.getElementById('trend-insights').innerHTML = buildInsightsHtml(series[series.length - 2], series[series.length - 1], def);
+
+    const latestSnapshot = chronological[chronological.length - 1];
+    const previousSnapshot = chronological[chronological.length - 2];
+    const top25 = [...latestSnapshot.sqpRows]
+      .sort((a, b) => b.search_query_volume - a.search_query_volume)
+      .slice(0, 25)
+      .map((row, i) => {
+        const prevRow = previousSnapshot.sqpRows.find((q) => normalize(q.search_query) === normalize(row.search_query));
+        const currentValue = getRowMetricValue(row, metricKey);
+        const prevValue = prevRow ? getRowMetricValue(prevRow, metricKey) : null;
+        const delta = prevValue != null ? currentValue - prevValue : null;
+        return { ...row, _idx: i, _currentValue: currentValue, _delta: delta };
+      });
+    top25Cache = top25;
+
+    const buildKeywordRows = (sorted) => sorted.map((row, displayPos) => {
+      const deltaColor = row._delta == null ? 'var(--text-faint)' : row._delta >= 0 ? 'var(--cyan)' : 'var(--red)';
+      const deltaText = row._delta == null ? 'New' : `${row._delta >= 0 ? '+' : ''}${formatMetricValue(row._delta, def.format)}`;
+      const isSelected = selectedKeywordIdx === row._idx;
+      return `<tr data-kw-idx="${row._idx}" style="cursor:pointer;${isSelected ? ' background:var(--bg-panel-raised);' : ''}">
+        <td>${displayPos + 1}</td>
+        <td>${escapeHtml(row.search_query)}</td>
+        <td class="num">${formatMetricValue(row._currentValue, def.format)}</td>
+        <td class="num" style="color:${deltaColor}">${deltaText}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('trend-keywords').innerHTML = `
+      <div class="card">
+        <div class="card-title">Top 25 Keywords</div>
+        <div class="card-desc">Ranked by search query volume in the latest snapshot (${escapeHtml(latestSnapshot.uploadDate)}). Click a row for its own isolated trend, or a column header to sort.</div>
+        <table class="data-table" id="top25-table">
+          <thead><tr><th>#</th><th>Search query</th><th class="num">${escapeHtml(def.label)}</th><th class="num">WoW &Delta;</th></tr></thead>
+          <tbody>${buildKeywordRows(top25)}</tbody>
+        </table>
+      </div>`;
+
+    function wireTop25Clicks() {
+      document.getElementById('trend-keywords').querySelectorAll('[data-kw-idx]').forEach((tr) => {
+        tr.addEventListener('click', () => {
+          document.getElementById('trend-keywords').querySelectorAll('[data-kw-idx]').forEach((r) => { r.style.background = ''; });
+          tr.style.background = 'var(--bg-panel-raised)';
+          renderKeywordDetail(Number(tr.dataset.kwIdx));
+        });
+      });
+    }
+    wireTop25Clicks();
+
+    makeSortableTable(
+      document.getElementById('top25-table'),
+      top25,
+      [undefined, 'search_query', '_currentValue', '_delta'],
+      buildKeywordRows,
+      wireTop25Clicks
+    );
+
+    if (selectedKeywordIdx != null && selectedKeywordIdx < top25.length) {
+      renderKeywordDetail(selectedKeywordIdx);
+    } else {
+      selectedKeywordIdx = null;
+      if (keywordChartInstance) { keywordChartInstance.destroy(); keywordChartInstance = null; }
+      document.getElementById('trend-keyword-detail').innerHTML = '';
+    }
+  };
+
+  metricSelect.addEventListener('change', draw);
+  cadenceSelect.addEventListener('change', draw);
+  draw();
+}
+
+const CADENCE_LABELS = { weekly: 'Weekly', monthly: 'Monthly', adhoc: 'Ad hoc' };
+let historyActiveCadence = 'weekly';
+
+async function renderHistory() {
+  const container = document.getElementById('page-history');
+  const accountVal = document.getElementById('sidebar-account').value;
+  if (!accountVal || accountVal === '__new__') {
+    container.innerHTML = '<div class="card"><div class="empty-state">Select an account in the sidebar to see its history.</div></div>';
+    return;
+  }
+  const products = await dbListProducts(accountVal);
+  if (products.length === 0) {
+    container.innerHTML = `<div class="card"><div class="empty-state">No saved analyses yet for ${escapeHtml(accountVal)}.</div></div>`;
+    return;
+  }
+  const snapshotsByProduct = await Promise.all(products.map((p) => dbListSnapshotsForProduct(p.id)));
+  const countsByCadence = { weekly: 0, monthly: 0, adhoc: 0 };
+  snapshotsByProduct.forEach((snapshots) => {
+    snapshots.forEach((s) => { countsByCadence[s.cadence || 'adhoc']++; });
+  });
+  const totalSnapshots = countsByCadence.weekly + countsByCadence.monthly + countsByCadence.adhoc;
+
+  const tabsHtml = ['weekly', 'monthly', 'adhoc'].map((c) =>
+    `<button class="btn${historyActiveCadence === c ? ' primary' : ''}" data-cadence-tab="${c}">${CADENCE_LABELS[c]} (${countsByCadence[c]})</button>`
+  ).join(' ');
+
+  let html = `
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">Products tracked</div><div class="metric-value orange">${products.length}</div></div>
+      <div class="metric-card"><div class="metric-label">Total saved snapshots</div><div class="metric-value cyan">${totalSnapshots}</div></div>
+    </div>
+    <div class="form-row">${tabsHtml}</div>`;
+
+  let anyInThisCadence = false;
+  products.forEach((p, i) => {
+    const snapshots = snapshotsByProduct[i].filter((s) => (s.cadence || 'adhoc') === historyActiveCadence);
+    if (snapshots.length === 0) return;
+    anyInThisCadence = true;
+    const rows = snapshots.map((s) => `
+      <tr>
+        <td>${escapeHtml(s.uploadDate)}</td>
+        <td class="num">${s.sqpRows.length}</td>
+        <td class="num">${s.targetingRows.length}</td>
+        <td>${s.id === state.currentSnapshotId ? '<span class="tag cyan">Loaded</span>' : ''}</td>
+        <td><button class="btn" data-load-h="${s.id}" data-product-h="${p.id}">Load</button> <button class="btn" data-delete-h="${s.id}" data-product-h="${p.id}">Delete</button></td>
+      </tr>`).join('');
+    html += `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-weight:600">${escapeHtml(p.asin)}${p.productName ? ' \u2014 ' + escapeHtml(p.productName) : ''}</div>
+          <span class="tag cyan">${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'}</span>
+        </div>
+        <table class="data-table"><thead><tr><th>Date</th><th class="num">Queries</th><th class="num">Keywords</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+  });
+
+  if (!anyInThisCadence) {
+    html += `<div class="card"><div class="empty-state">No ${CADENCE_LABELS[historyActiveCadence].toLowerCase()} snapshots saved yet for this account.</div></div>`;
+  }
+
+  container.innerHTML = html;
+  container.querySelectorAll('[data-cadence-tab]').forEach((btn) => btn.addEventListener('click', () => {
+    historyActiveCadence = btn.dataset.cadenceTab;
+    renderHistory();
+  }));
+  container.querySelectorAll('[data-load-h]').forEach((btn) => btn.addEventListener('click', () => loadSnapshotById(btn.dataset.loadH, btn.dataset.productH)));
+  container.querySelectorAll('[data-delete-h]').forEach((btn) => btn.addEventListener('click', () => deleteSnapshotById(btn.dataset.deleteH, btn.dataset.productH)));
+}
+
+// Nav wiring
+const pages = ['upload', 'gaps', 'cannibalization', 'harvesting', 'signal', 'trends', 'history'];
+const titles = {
+  upload: ['Upload', "Load this week's SQP + Targeting exports"],
+  gaps: ['Coverage Gaps', 'Volume with no keyword targeting it'],
+  cannibalization: ['Cannibalization', 'Queries matched by multiple keywords at once'],
+  harvesting: ['Harvesting', 'New keyword and exact-match graduation candidates'],
+  signal: ['Conversion Signal', 'Queries converting above their click share'],
+  trends: ['Trends', 'Week-over-week metric trend, insights, and keyword drill-down'],
+  history: ['History', 'Every saved analysis for this account, across all products'],
+};
+document.getElementById('nav').addEventListener('click', (e) => {
+  const item = e.target.closest('.nav-item');
+  if (!item) return;
+  const page = item.dataset.page;
+  document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
+  item.classList.add('active');
+  pages.forEach((p) => document.getElementById('page-' + p).classList.toggle('hidden', p !== page));
+  document.getElementById('page-title').textContent = titles[page][0];
+  document.getElementById('page-subtitle').textContent = titles[page][1];
+});
+
+initApp();
+</script>
+</body>
+</html>
