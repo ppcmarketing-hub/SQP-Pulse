@@ -1473,6 +1473,7 @@ async function renderTrends() {
 
 const CADENCE_LABELS = { weekly: 'Weekly', monthly: 'Monthly', adhoc: 'Ad hoc' };
 let historyActiveCadence = 'weekly';
+let historyActiveProductId = 'all';
 
 async function renderHistory() {
   const container = document.getElementById('page-history');
@@ -1481,11 +1482,18 @@ async function renderHistory() {
     container.innerHTML = '<div class="card"><div class="empty-state">Select an account in the sidebar to see its history.</div></div>';
     return;
   }
-  const products = await dbListProducts(accountVal);
-  if (products.length === 0) {
+  const allProducts = await dbListProducts(accountVal);
+  if (allProducts.length === 0) {
     container.innerHTML = `<div class="card"><div class="empty-state">No saved analyses yet for ${escapeHtml(accountVal)}.</div></div>`;
     return;
   }
+  // Reset the product filter if it no longer refers to a real product for
+  // this account (e.g. it was deleted, or we just switched accounts).
+  if (historyActiveProductId !== 'all' && !allProducts.some((p) => p.id === historyActiveProductId)) {
+    historyActiveProductId = 'all';
+  }
+  const products = historyActiveProductId === 'all' ? allProducts : allProducts.filter((p) => p.id === historyActiveProductId);
+
   const snapshotsByProduct = await Promise.all(products.map((p) => dbListSnapshotsForProduct(p.id)));
   const countsByCadence = { weekly: 0, monthly: 0, adhoc: 0 };
   snapshotsByProduct.forEach((snapshots) => {
@@ -1497,10 +1505,17 @@ async function renderHistory() {
     `<button class="btn${historyActiveCadence === c ? ' primary' : ''}" data-cadence-tab="${c}">${CADENCE_LABELS[c]} (${countsByCadence[c]})</button>`
   ).join(' ');
 
+  const productOptions = ['<option value="all">All products</option>']
+    .concat(allProducts.map((p) => `<option value="${p.id}"${p.id === historyActiveProductId ? ' selected' : ''}>${escapeHtml(p.asin)}${p.productName ? ' \u2014 ' + escapeHtml(p.productName) : ''}</option>`))
+    .join('');
+
   let html = `
     <div class="metric-grid">
-      <div class="metric-card"><div class="metric-label">Products tracked</div><div class="metric-value orange">${products.length}</div></div>
+      <div class="metric-card"><div class="metric-label">Products tracked</div><div class="metric-value orange">${allProducts.length}</div></div>
       <div class="metric-card"><div class="metric-label">Total saved snapshots</div><div class="metric-value cyan">${totalSnapshots}</div></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><label>Product</label><select id="history-product-filter">${productOptions}</select></div>
     </div>
     <div class="form-row">${tabsHtml}</div>`;
 
@@ -1528,10 +1543,15 @@ async function renderHistory() {
   });
 
   if (!anyInThisCadence) {
-    html += `<div class="card"><div class="empty-state">No ${CADENCE_LABELS[historyActiveCadence].toLowerCase()} snapshots saved yet for this account.</div></div>`;
+    const productNote = historyActiveProductId === 'all' ? 'this account' : 'this product';
+    html += `<div class="card"><div class="empty-state">No ${CADENCE_LABELS[historyActiveCadence].toLowerCase()} snapshots saved yet for ${productNote}.</div></div>`;
   }
 
   container.innerHTML = html;
+  document.getElementById('history-product-filter').addEventListener('change', (e) => {
+    historyActiveProductId = e.target.value;
+    renderHistory();
+  });
   container.querySelectorAll('[data-cadence-tab]').forEach((btn) => btn.addEventListener('click', () => {
     historyActiveCadence = btn.dataset.cadenceTab;
     renderHistory();
