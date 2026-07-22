@@ -435,27 +435,41 @@ function findCannibalization(targetingKeywords) {
   }
   return results.sort((a, b) => b.campaign_count - a.campaign_count || b.rows.length - a.rows.length);
 }
-function findHarvestingCandidates(sqpQueries, keywordQueryMap, minPurchases) {
-  minPurchases = minPurchases == null ? 1 : minPurchases;
+/** Builds a query -> set-of-match-types lookup from the keyword_query_map,
+ * shared by any analysis that needs to know how well-covered a query is. */
+function buildMatchTypesByQuery(keywordQueryMap) {
   const matchTypesByQuery = new Map();
   for (const m of keywordQueryMap) {
     const key = normalize(m.search_query);
     if (!matchTypesByQuery.has(key)) matchTypesByQuery.set(key, new Set());
     matchTypesByQuery.get(key).add(m.match_type);
   }
+  return matchTypesByQuery;
+}
+
+/** 'new' = no keyword covers this query at all; 'graduate' = only broad/phrase
+ * coverage, no exact match; 'covered' = an exact-match keyword already targets it. */
+function getCoverageStatus(query, matchTypesByQuery) {
+  const types = matchTypesByQuery.get(normalize(query.search_query)) || new Set();
+  if (types.size === 0) return 'new';
+  if (!types.has('exact')) return 'graduate';
+  return 'covered';
+}
+
+function findHarvestingCandidates(sqpQueries, keywordQueryMap, minPurchases) {
+  minPurchases = minPurchases == null ? 1 : minPurchases;
+  const matchTypesByQuery = buildMatchTypesByQuery(keywordQueryMap);
   const scored = sqpQueries.filter((q) => q.purchases >= minPurchases).map((q) => {
-    const types = matchTypesByQuery.get(normalize(q.search_query)) || new Set();
-    const hasExact = types.has('exact');
-    const hasAny = types.size > 0;
-    let status = !hasAny ? 'new' : (!hasExact ? 'graduate' : 'covered');
+    const status = getCoverageStatus(q, matchTypesByQuery);
     return Object.assign({}, q, { status });
   }).filter((q) => q.status !== 'covered');
   return scored.sort((a, b) => b.purchase_share - a.purchase_share || b.purchases - a.purchases);
 }
-function findConversionSignal(sqpQueries, minDelta, minPurchases) {
+function findConversionSignal(sqpQueries, minDelta, minPurchases, keywordQueryMap) {
   minDelta = minDelta == null ? 0.02 : minDelta;
   minPurchases = minPurchases == null ? 1 : minPurchases;
-  return sqpQueries.filter((q) => q.purchases >= minPurchases).map((q) => Object.assign({}, q, { signal_delta: q.purchase_share - q.click_share })).filter((q) => q.signal_delta >= minDelta).sort((a, b) => b.signal_delta - a.signal_delta);
+  const matchTypesByQuery = buildMatchTypesByQuery(keywordQueryMap || []);
+  return sqpQueries.filter((q) => q.purchases >= minPurchases).map((q) => Object.assign({}, q, { signal_delta: q.purchase_share - q.click_share, coverage_status: getCoverageStatus(q, matchTypesByQuery) })).filter((q) => q.signal_delta >= minDelta).sort((a, b) => b.signal_delta - a.signal_delta);
 }
 function diffSnapshots(currentQueries, previousQueries) {
   const prevByQuery = new Map(previousQueries.map((q) => [normalize(q.search_query), q]));
@@ -1125,24 +1139,31 @@ function renderHarvesting() {
   ]));
 }
 
+const COVERAGE_TAGS = {
+  new: '<span class="tag orange">Untargeted</span>',
+  graduate: '<span class="tag cyan">Broad/Phrase only</span>',
+  covered: '<span class="tag" style="color:var(--text-dim); border-color:var(--border-bright);">Exact match</span>',
+};
+
 function renderSignal() {
   const container = document.getElementById('page-signal');
   if (!state.sqpRows) return noDataYet(container);
-  const signals = findConversionSignal(state.sqpRows);
-  const buildBody = (sorted) => sorted.slice(0, 200).map((s) => `<tr><td>${escapeHtml(s.search_query)}</td><td class="num">${pct(s.purchase_share)}</td><td class="num">${pct(s.click_share)}</td><td class="num" style="color:var(--orange)">+${(s.signal_delta * 100).toFixed(1)}pp</td><td class="num">${s.search_query_volume.toLocaleString()}</td></tr>`).join('');
+  const signals = findConversionSignal(state.sqpRows, undefined, undefined, state.keywordQueryMap);
+  const buildBody = (sorted) => sorted.slice(0, 200).map((s) => `<tr><td>${escapeHtml(s.search_query)}</td><td>${COVERAGE_TAGS[s.coverage_status]}</td><td class="num">${pct(s.purchase_share)}</td><td class="num">${pct(s.click_share)}</td><td class="num" style="color:var(--orange)">+${(s.signal_delta * 100).toFixed(1)}pp</td><td class="num">${s.search_query_volume.toLocaleString()}</td></tr>`).join('');
   container.innerHTML = `
     <div class="metric-grid"><div class="metric-card"><div class="metric-label">Queries with strong signal</div><div class="metric-value orange">${signals.length}</div></div></div>
     <div class="card">
       <div class="card-title">Conversion share signal</div>
-      <div class="card-desc">Queries where purchase share meaningfully outpaces click share &mdash; strong, possibly underexploited buyer intent. Click a column header to sort${signals.length > 200 ? ' (showing top 200)' : ''}.</div>
-      ${signals.length === 0 ? '<div class="empty-state">No queries clear this signal threshold.</div>' : `<table class="data-table" id="signal-table"><thead><tr><th>Search query</th><th class="num">Purchase share</th><th class="num">Click share</th><th class="num">Signal delta</th><th class="num">Volume</th></tr></thead><tbody>${buildBody(signals)}</tbody></table><div style="margin-top:16px;"><button class="btn" id="export-signal">Export CSV</button></div>`}
+      <div class="card-desc">Queries where purchase share meaningfully outpaces click share &mdash; strong, possibly underexploited buyer intent. Coverage shows whether you're already targeting it. Click a column header to sort${signals.length > 200 ? ' (showing top 200)' : ''}.</div>
+      ${signals.length === 0 ? '<div class="empty-state">No queries clear this signal threshold.</div>' : `<table class="data-table" id="signal-table"><thead><tr><th>Search query</th><th>Coverage</th><th class="num">Purchase share</th><th class="num">Click share</th><th class="num">Signal delta</th><th class="num">Volume</th></tr></thead><tbody>${buildBody(signals)}</tbody></table><div style="margin-top:16px;"><button class="btn" id="export-signal">Export CSV</button></div>`}
     </div>`;
   if (signals.length > 0) {
-    makeSortableTable(document.getElementById('signal-table'), signals, ['search_query', 'purchase_share', 'click_share', 'signal_delta', 'search_query_volume'], buildBody);
+    makeSortableTable(document.getElementById('signal-table'), signals, ['search_query', 'coverage_status', 'purchase_share', 'click_share', 'signal_delta', 'search_query_volume'], buildBody);
   }
   const btn = document.getElementById('export-signal');
   if (btn) btn.addEventListener('click', () => downloadCsv('sqp-pulse-conversion-signal.csv', signals, [
     { label: 'Search Query', value: (r) => r.search_query },
+    { label: 'Coverage', value: (r) => r.coverage_status },
     { label: 'Purchase Share', value: (r) => r.purchase_share },
     { label: 'Click Share', value: (r) => r.click_share },
     { label: 'Signal Delta', value: (r) => r.signal_delta },
